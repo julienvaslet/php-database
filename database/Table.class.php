@@ -34,7 +34,27 @@ class Table
 
     public static function getFullEscapedTableName()
     {
-        return "`".Database::get()->getDatabaseName()."`.`".static::getTableName()."`";
+        return Database::escapeName(Database::get()->getDatabaseName()).".".Database::escapeName(static::getTableName());
+    }
+
+    public static function getPrimaryKeyName()
+    {
+        return "pk_".static::getTableName();
+    }
+
+    public static function getEscapedPrimaryKeyName()
+    {
+        return Database::escapeName(static::getPrimaryKeyName());
+    }
+
+    public static function getUniqueKeyName($columnName)
+    {
+        return "uniq_".static::getTableName()."_${columnName}";
+    }
+
+    public static function getEscapedUniqueKeyName($columnName)
+    {
+        return Database::escapeName(static::getUniqueKeyName($columnName));
     }
 
     public static function getCreateTableQuery($onlyIfNotExists = true) : string
@@ -45,7 +65,10 @@ class Table
             "("
         );
 
-        $columns = array();
+        $columnsAndConstraints = array();
+        $primaryKey = array();
+        $uniqueColumns = array();
+
         foreach (static::getColumns() as $column)
         {
             $columnDefinition = array();
@@ -57,14 +80,32 @@ class Table
                 $columnDefinition[] = "AUTO_INCREMENT";
             }
 
-            // TODO: Handle unique and primary key here.
-
             $columnDefinition[] = "COMMENT '".str_replace("'", "\'", $column->getComment())."'";
 
-            $columns[] = implode(" ", $columnDefinition);
+            $columnsAndConstraints[] = implode(" ", $columnDefinition);
+
+            if ($column->isPrimaryKey())
+            {
+                $primaryKey[] = $column->getEscapedName();
+            }
+
+            if ($column->isUnique())
+            {
+                $uniqueColumns[] = $column;
+            }
         }
 
-        $queryParts[] = implode(", ", $columns);
+        if (count($primaryKey))
+        {
+            $columnsAndConstraints[] = "CONSTRAINT ".static::getEscapedPrimaryKeyName()." PRIMARY KEY (".implode(", ", $primaryKey).")";
+        }
+
+        foreach ($uniqueColumns as $column)
+        {
+            $columnsAndConstraints[] = "CONSTRAINT ".static::getEscapedUniqueKeyName($column->getName())." UNIQUE (".$column->getEscapedName().")";
+        }
+
+        $queryParts[] = implode(", ", $columnsAndConstraints);
         $queryParts[] = ");";
 
         // TODO: Integrate engine: InnoDb or MyISAM?
@@ -72,7 +113,27 @@ class Table
         return implode(" ", $queryParts);
     }
 
-    public static function createTable($onlyIfNotExists = true)
+    public static function createTable($onlyIfNotExists = true) : bool
     {
+        return boolval(Database::get()->query(static::getCreateTableQuery($onlyIfNotExists)));
+    }
+
+    public static function getDropTableQuery($onlyIfExists = true) : string
+    {
+        $queryParts = array("DROP TABLE");
+
+        if ($onlyIfExists)
+        {
+            $queryParts[] = "IF EXISTS";
+        }
+
+        $queryParts[] = static::getFullEscapedTableName();
+
+        return implode(" ", $queryParts).";";
+    }
+
+    public static function dropTable($onlyIfExists = true) : bool
+    {
+        return boolval(Database::get()->query(static::getDropTableQuery($onlyIfExists)));
     }
 }

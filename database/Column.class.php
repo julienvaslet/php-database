@@ -49,7 +49,7 @@ class Column
 
     public function getEscapedName() : string
     {
-        return "`".$this->name."`";
+        return Database::escapeName($this->name);
     }
 
     public function getType() : string
@@ -87,11 +87,6 @@ class Column
 
         $typedef = array();
 
-        if ($unsigned)
-        {
-            $typedef[] = "UNSIGNED";
-        }
-
         $typesFromPhp = array(
             "string" => array("VARCHAR", "TEXT", "BLOB"),
             "float" => array("FLOAT", "DOUBLE", "DECIMAL"),
@@ -127,6 +122,12 @@ class Column
         }
 
         $typedef[] = $type;
+
+        if ($unsigned)
+        {
+            $typedef[] = "UNSIGNED";
+        }
+
         $typedef[] = $null ? "NULL" : "NOT NULL";
 
         return implode(" ", $typedef);

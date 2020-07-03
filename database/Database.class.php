@@ -9,6 +9,7 @@ class Database
     protected static ?Database $instance = null;
     protected \mysqli $db;
     protected string $databaseName;
+    protected bool $debug = false;
 
     protected function __construct(string $host, int $port, string $user, string $password, string $database)
     {
@@ -43,13 +44,30 @@ class Database
         return $this->databaseName;
     }
 
+    public function enableDebug()
+    {
+        $this->debug = true;
+    }
+
+    public function disableDebug()
+    {
+        $this->debug = false;
+    }
+
     public function query(string $query)
     {
         $result = $this->db->query($query);
 
         if ($result === false)
         {
-            throw new \Exception("SQL error ".$this->db->errno.": ".$this->db->error);
+            $message = "SQL error ".$this->db->errno.": ".$this->db->error;
+
+            if ($this->debug === true)
+            {
+                $message .= "\nQuery: ${query}";
+            }
+
+            throw new \Exception($message);
         }
 
         return $result;
@@ -63,5 +81,10 @@ class Database
     public static final function get() : Database
     {
         return Database::$instance;
+    }
+
+    public static function escapeName(string $name) : string
+    {
+        return "`${name}`";
     }
 }

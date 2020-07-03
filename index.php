@@ -18,6 +18,8 @@ Database::configure(
     "test_db"
 );
 
+Database::get()->enableDebug();
+
 
 class Car extends Table
 {
@@ -43,4 +45,4 @@ class Car extends Table
 }
 
 
-var_dump(Car::getCreateTableQuery());
+Car::createTable();
