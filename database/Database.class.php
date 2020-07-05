@@ -73,6 +73,11 @@ class Database
         return $result;
     }
 
+    public function getLastInsertedId() : int
+    {
+        return $this->db->insert_id;
+    }
+
     public static function configure(string $host, int $port, string $user, string $password, string $database) : Database
     {
         return new Database($host, $port, $user, $password, $database);
@@ -85,6 +90,41 @@ class Database
 
     public static function escapeName(string $name) : string
     {
+        if (preg_match("/^`[^`]`\$/", $name))
+        {
+            return $name;
+        }
+
         return "`${name}`";
+    }
+
+    public static function escapeValue($value) : string
+    {
+        $escapedValue = $value;
+
+        if (is_null($value))
+        {
+            $escapedValue = "NULL";
+        }
+        else if (is_string($value))
+        {
+            $escapedValue = preg_replace("/'/", "\\'", $value);
+            $encoding = mb_detect_encoding($escapedValue, mb_detect_order(), true);
+
+            if($encoding != "UTF-8")
+            {
+                $escapedValue = "_utf8'".mb_convert_encoding($escapedValue, "UTF-8", $encoding)."'";
+            }
+            else
+            {
+                $escapedValue = "_utf8'".$escapedValue."'";
+            }
+        }
+        else if (is_bool($value))
+        {
+            $escapedValue = ($value === true) ? "1" : "0";
+        }
+
+        return $escapedValue;
     }
 }

@@ -9,9 +9,69 @@ require_once(__DIR__."/Database.class.php");
 
 class Table
 {
-    public function __construct()
-    {
+    protected bool $__newRow;
 
+    public function __construct(...$values)
+    {
+        $this->__newRow = true;
+        $argumentsCount = count($values);
+
+        foreach (static::getColumns() as $column)
+        {
+            if ($column->isAutoIncremented())
+            {
+                $this->{$column->getName()} = 0;
+            }
+            else if (count($values))
+            {
+                $this->{$column->getName()} = $column->parseValue(array_shift($values));
+            }
+            else
+            {
+                // TODO: Get default values
+                throw new \Exception("Not enough arguments: ${argumentsCount} specified, ".count(static::getColumns())." expected.");
+            }
+        }
+
+        if (count($values))
+        {
+            throw new \Exception("Too many arguments: ${argumentsCount} specified, ".($argumentsCount - count($values))." expected.");
+        }
+    }
+
+    public function save()
+    {
+        if ($this->__newRow === true)
+        {
+            $data = array();
+            $autoIncrementColumn = null;
+
+            foreach (static::getColumns() as $column)
+            {
+                // Auto-incremented field should be handled on the database side.
+                if ($column->isAutoincremented())
+                {
+                    $autoIncrementColumn = $column;
+                    continue;
+                }
+
+                $data[$column->getName()] = $this->{$column->getName()};
+            }
+
+            Database::get()->query(static::getInsertIntoQuery($data));
+
+            if (!is_null($autoIncrementColumn))
+            {
+                $this->{$autoIncrementColumn->getName()} = Database::get()->getLastInsertedId();
+            }
+
+            $this->__newRow = false;
+        }
+        else
+        {
+            // TODO: update...
+            // where: primary key or all fields if no primary key defined.
+        }
     }
 
     protected static function getColumns() : array
@@ -21,7 +81,11 @@ class Table
 
         foreach ($class->getProperties() as $property)
         {
-            $columns[] = new Column($property);
+            // Ignore attributes starting with "__".
+            if (substr($property->getName(), 0, 2) != "__")
+            {
+                $columns[] = new Column($property);
+            }
         }
 
         return $columns;
@@ -135,5 +199,64 @@ class Table
     public static function dropTable($onlyIfExists = true) : bool
     {
         return boolval(Database::get()->query(static::getDropTableQuery($onlyIfExists)));
+    }
+
+    public static function getInsertIntoQuery(array $data)
+    {
+        $columns = array();
+        $values = array();
+
+        foreach ($data as $column => $value)
+        {
+            $columns[] = Database::escapeName($column);
+            $values[] = Database::escapeValue($value);
+        }
+
+        $queryParts = array(
+            "INSERT INTO",
+            static::getFullEscapedTableName(),
+            "(",
+            implode(", ", $columns),
+            ") VALUES (",
+            implode(", ", $values),
+            ");"
+        );
+
+        return implode(" ", $queryParts);
+    }
+
+    public static function newInstanceFromArray(array $data) : Table
+    {
+        $constructorArgs = array();
+
+        foreach (static::getColumns() as $column)
+        {
+            if ($column->isAutoIncremented())
+            {
+                continue;
+            }
+            else
+            {
+                if (array_key_exists($column->getName(), $data))
+                {
+                    $constructorArgs[] = $data[$column->getName()];
+                }
+                else
+                {
+                    // TODO: Get default value if defined
+                    throw new \Exception("Missing value for \"".$column->getName()."\" column.");
+                }
+            }
+        }
+
+        $class = new \ReflectionClass(static::class);
+        return $class->newInstanceArgs($constructorArgs);
+    }
+
+    public static function create(array $data) : Table
+    {
+        $instance = static::newInstanceFromArray($data);
+        $instance->save();
+        return $instance;
     }
 }

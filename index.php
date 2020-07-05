@@ -38,11 +38,22 @@ class Car extends Table
     protected string $brand;
 
     /**
-     * @decimal(5,2)
+     * @decimal(9,2)
      * The car average price.
      */
     protected float $price;
 }
 
 
+Car::dropTable();
 Car::createTable();
+
+$car = new Car("Toyota", 35000.0);
+$car->save();
+
+$car2 = Car::create(
+    array(
+        "brand" => "Ford",
+        "price" => 45000.0
+    )
+);

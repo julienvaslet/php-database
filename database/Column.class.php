@@ -7,7 +7,8 @@ namespace database;
 class Column
 {
     protected string $name;
-    protected string $type;
+    protected \ReflectionType $phpType;
+    protected string $sqlType;
     protected string $comment;
 
     protected bool $autoIncrement;
@@ -32,11 +33,12 @@ class Column
         $this->comment = $attributes["comment"];
         $this->unique = array_key_exists("unique", $attributes) && $attributes["unique"] == true;
         $this->primaryKey = array_key_exists("primaryKey", $attributes) && $attributes["primaryKey"] == true;
-        $this->type = static::getMySqlType($property->getType(), $attributes);
+        $this->phpType = $property->getType();
+        $this->sqlType = static::getMySqlType($this->phpType, $attributes);
 
         $this->autoIncrement = array_key_exists("autoIncrement", $attributes) && $attributes["autoIncrement"] == true;
 
-        if ($this->autoIncrement && $property->getType()->getName() != "int")
+        if ($this->autoIncrement && $this->phpType->getName() != "int")
         {
             throw new \Exception("MySQL auto-increment option can only be used on integer.");
         }
@@ -54,7 +56,7 @@ class Column
 
     public function getType() : string
     {
-        return $this->type;
+        return $this->sqlType;
     }
 
     public function getComment() : string
@@ -75,6 +77,71 @@ class Column
     public function isPrimaryKey() : bool
     {
         return $this->primaryKey;
+    }
+
+    public function parseValue($value)
+    {
+        if (is_null($value))
+        {
+            if (!$this->phpType->allowsNull())
+            {
+                throw new \Exception("Column ".$this->getName()." can't be null.");
+            }
+        }
+        else
+        {
+            // TODO: Be more tolerant. Here the type check is really strict.
+            // A string containing a correct value isn't authorized.
+            switch ($this->phpType->getName())
+            {
+                case "string":
+                {
+                    $value = strval($value);
+                    break;
+                }
+
+                case "int":
+                {
+                    if (!is_int($value))
+                    {
+                        throw new \Exception("Column ".$this->getName()." must be an integer.");
+                    }
+
+                    $value = intval($value);
+                    break;
+                }
+
+                case "float":
+                {
+                    if (!is_float($value))
+                    {
+                        throw new \Exception("Column ".$this->getName()." must be a float.");
+                    }
+
+                    $value = floatval($value);
+                    break;
+                }
+
+                case "bool":
+                {
+                    if (!is_bool($value))
+                    {
+                        throw new \Exception("Column ".$this->getName()." must be a boolean.");
+                    }
+
+                    $value = boolval($value);
+                    break;
+                }
+
+                default:
+                {
+                    // TODO: Handle custom types.
+                    break;
+                }
+            }
+        }
+
+        return $value;
     }
 
     // TODO: Handle more types
