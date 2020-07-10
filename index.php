@@ -42,6 +42,26 @@ class Car extends Table
      * The car average price.
      */
     protected float $price;
+
+    public function getId() : int
+    {
+        return $this->id;
+    }
+
+    public function getBrand() : string
+    {
+        return $this->brand;
+    }
+
+    public function getPrice() : float
+    {
+        return $this->price;
+    }
+
+    public function setPrice(float $price)
+    {
+        $this->price = $price;
+    }
 }
 
 
@@ -57,3 +77,16 @@ $car2 = Car::create(
         "price" => 45000.0
     )
 );
+
+$car3 = Car::create(
+    array(
+        "brand" => "Chevrolet",
+        "price" => 20000.0
+    )
+);
+
+$carId = $car2->getId();
+$car = Car::get($carId);
+
+$car->setPrice(40000.0);
+$car->save();

@@ -90,8 +90,6 @@ class Column
         }
         else
         {
-            // TODO: Be more tolerant. Here the type check is really strict.
-            // A string containing a correct value isn't authorized.
             switch ($this->phpType->getName())
             {
                 case "string":
@@ -102,9 +100,9 @@ class Column
 
                 case "int":
                 {
-                    if (!is_int($value))
+                    if (!is_int($value) && !(is_string($value) && preg_match("/^(?:\+-)?[0-9]+$/", $value)))
                     {
-                        throw new \Exception("Column ".$this->getName()." must be an integer.");
+                        throw new \Exception("Column ".$this->getName()." must be an integer, ".gettype($value)." provided.");
                     }
 
                     $value = intval($value);
@@ -113,9 +111,9 @@ class Column
 
                 case "float":
                 {
-                    if (!is_float($value))
+                    if (!is_float($value) && !(is_string($value) && preg_match("/^(?:\+-)?[0-9]*\.[0-9]*(?:[eE][0-9]+)?$/", $value)))
                     {
-                        throw new \Exception("Column ".$this->getName()." must be a float.");
+                        throw new \Exception("Column ".$this->getName()." must be a float, ".gettype($value)." provided.");
                     }
 
                     $value = floatval($value);
@@ -124,12 +122,24 @@ class Column
 
                 case "bool":
                 {
-                    if (!is_bool($value))
+                    if (is_string($value))
                     {
-                        throw new \Exception("Column ".$this->getName()." must be a boolean.");
+                        $value = strtolower($value);
                     }
 
-                    $value = boolval($value);
+                    if (!is_bool($value) && !(is_string($value) && preg_match("/^(?:1|0|true|false)$/", $value)))
+                    {
+                        throw new \Exception("Column ".$this->getName()." must be a boolean, ".gettype($value)." provided.");
+                    }
+
+                    if (is_string($value))
+                    {
+                        $value = !in_array($value, array("0", "false"));
+                    }
+                    else
+                    {
+                        $value = boolval($value);
+                    }
                     break;
                 }
 

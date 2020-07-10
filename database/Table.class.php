@@ -5,12 +5,22 @@ namespace database;
 
 require_once(__DIR__."/Column.class.php");
 require_once(__DIR__."/Database.class.php");
+require_once(__DIR__."/filters/Filter.class.php");
+require_once(__DIR__."/filters/EqualFilter.class.php");
+
+use database\filters\Filter;
+use database\filters\EqualFilter;
 
 
 class Table
 {
     protected bool $__newRow;
 
+    /**
+     * Create a new instance for a new object that doesn't exist in the database.
+     * Parameters of this constructor are the class attributes in their order of definition.
+     * Auto-incremented values are ignored, because yes they will be automatically incremented :)
+     */
     public function __construct(...$values)
     {
         $this->__newRow = true;
@@ -28,7 +38,7 @@ class Table
             }
             else
             {
-                // TODO: Get default values
+                // TODO: Get default values if defined or null if allowed
                 throw new \Exception("Not enough arguments: ${argumentsCount} specified, ".count(static::getColumns())." expected.");
             }
         }
@@ -69,8 +79,32 @@ class Table
         }
         else
         {
-            // TODO: update...
-            // where: primary key or all fields if no primary key defined.
+            $data = array();
+            $filters = array();
+
+            foreach (static::getColumns() as $column)
+            {
+                if ($column->isPrimaryKey())
+                {
+                    $filters[] = new EqualFilter($column, $this->{$column->getName()});
+                }
+                else
+                {
+                    $data[$column->getName()] = $this->{$column->getName()};
+                }
+            }
+
+            // When there is no primary key, use the data as filter.
+            if (count($filters) == 0)
+            {
+                // TODO: optimize to have only one call to getColumns()
+                foreach (static::getColumns() as $column)
+                {
+                    $filters[] = new EqualFilter($column, $this->{$column->getName()});
+                }
+            }
+
+            Database::get()->query(static::getUpdateQuery($data, $filters));
         }
     }
 
@@ -225,6 +259,17 @@ class Table
         return implode(" ", $queryParts);
     }
 
+    /**
+     * Create a new instance for a new object that doesn't exist in the database.
+     * It behaves the same as calling the constructor but with an associative array
+     * as unique argument.
+     *
+     * Auto-incremented values are ignored, because yes they will be automatically incremented :)
+     * Missing values are set to their default value when it exists, or null if authorized.
+     *
+     * @param array $data   The associative array representing the instance values.
+     * @return Table        The newly created instance.
+     */
     public static function newInstanceFromArray(array $data) : Table
     {
         $constructorArgs = array();
@@ -243,7 +288,7 @@ class Table
                 }
                 else
                 {
-                    // TODO: Get default value if defined
+                    // TODO: Get default value if defined or null if allowed
                     throw new \Exception("Missing value for \"".$column->getName()."\" column.");
                 }
             }
@@ -253,10 +298,175 @@ class Table
         return $class->newInstanceArgs($constructorArgs);
     }
 
+    /**
+     * Load an existing object from an associative array into a new PHP instance.
+     * A missing value will throw an exception.
+     *
+     * @param array $data   The associative array representing the instance values.
+     * @return Table        The newly created instance.
+     */
+    public static function loadFromArray(array $data) : Table
+    {
+        $constructorArgs = array();
+        $postConstructorColumns = array();
+
+        foreach (static::getColumns() as $column)
+        {
+            if (array_key_exists($column->getName(), $data))
+            {
+                if ($column->isAutoIncremented())
+                {
+                    $postConstructorColumns[] = $column;
+                }
+                else
+                {
+                    $constructorArgs[] = $data[$column->getName()];
+                }
+            }
+            else
+            {
+                throw new \Exception("Missing value for \"".$column->getName()."\" column.");
+            }
+        }
+
+        $class = new \ReflectionClass(static::class);
+        $instance =  $class->newInstanceArgs($constructorArgs);
+
+        foreach ($postConstructorColumns as $column)
+        {
+            $instance->{$column->getName()} = $column->parseValue($data[$column->getName()]);
+        }
+
+        $instance->__newRow = false;
+
+        return $instance;
+    }
+
     public static function create(array $data) : Table
     {
         $instance = static::newInstanceFromArray($data);
         $instance->save();
         return $instance;
+    }
+
+    public static function get(...$primaryKey) : Table
+    {
+        $filters = array();
+
+        foreach (static::getColumns() as $column)
+        {
+            if ($column->isPrimaryKey())
+            {
+                if (count($primaryKey) == 0)
+                {
+                    throw new \Exception("Missing \"".$column->getName()."\" primary key argument.");
+                }
+
+                $filters[] = new EqualFilter($column, array_shift($primaryKey));
+            }
+        }
+
+        if (count($primaryKey) > 0)
+        {
+            throw new \Exception("Too many arguments passed: the primary key is composed of only ".count($filters)." argument(s).");
+        }
+
+        $results = static::find($filters, 1, 1);
+
+        if (count($results) == 0)
+        {
+            throw new \Exception("Primary key not found in the database.");
+        }
+
+        return $results[0];
+    }
+
+    protected static function getWhereClause(array $filters) : string
+    {
+        $parts = array();
+
+        // TODO: Implement the combinatory logic
+        foreach ($filters as $filter)
+        {
+            if ($filter instanceof Filter)
+            {
+                $parts[] = $filter->__toString();
+            }
+        }
+
+        if (count($parts))
+        {
+            return "WHERE ".implode(" AND ", $parts);
+        }
+        else
+        {
+            return "";
+        }
+    }
+
+    public static function getSelectQuery(array $filters, ?int $pageSize = null, ?int $page = null) : string
+    {
+        $columns = array();
+        foreach (static::getColumns() as $column)
+        {
+            $columns[] = $column->getEscapedName();
+        }
+
+        $queryParts = array(
+            "SELECT",
+            implode(", ", $columns),
+            "FROM",
+            static::getFullEscapedTableName()
+        );
+
+        if (count($filters) > 0)
+        {
+            $queryParts[] = static::getWhereClause($filters);
+        }
+
+        if (!is_null($pageSize))
+        {
+            $page = is_null($page) || $page == 0 ? 0 : $page - 1;
+            $queryParts[] = "LIMIT ${page},${pageSize}";
+        }
+
+        return implode(" ", $queryParts).";";
+    }
+
+    public static function find(array $filters, ?int $pageSize = null, ?int $page = null) : array
+    {
+        $results = array();
+        $rows = Database::get()->query(static::getSelectQuery($filters, $pageSize, $page));
+
+        while ($row = $rows->fetch_assoc())
+        {
+            $results[] = static::loadFromArray($row);
+        }
+
+        return $results;
+    }
+
+    public static function getUpdateQuery(array $data, array $filters) : string
+    {
+        $update = array();
+
+        foreach ($data as $key => $value)
+        {
+            $update[] = Database::escapeName($key)." = ".Database::escapeValue($value);
+        }
+
+        $queryParts = array(
+            "UPDATE",
+            static::getFullEscapedTableName(),
+            "SET",
+            implode(", ", $update)
+        );
+
+        if (count($filters))
+        {
+            $queryParts[] = static::getWhereClause($filters);
+        }
+
+        return implode(" ", $queryParts).";";
     }
 }
