@@ -6,11 +6,10 @@ namespace database\filters;
 require_once(__DIR__."/Filter.class.php");
 
 
-class Filter
+abstract class Filter
 {
     public function __construct()
     {
-
     }
 
     public function __toString() : string

@@ -9,7 +9,7 @@ require_once(__DIR__."/../Column.class.php");
 use database\Column;
 
 
-class ColumnFilter extends Filter
+abstract class ColumnFilter extends Filter
 {
     protected Column $column;
 

@@ -4,6 +4,9 @@ require_once(__DIR__."/database/database.php");
 
 use \database\Database;
 use \database\Table;
+use \database\filters\AndFilter;
+use \database\filters\GreaterThan;
+use \database\filters\DifferentFrom;
 
 /*
  * This is a sample usage of the database module.
@@ -90,3 +93,12 @@ $car = Car::get($carId);
 
 $car->setPrice(40000.0);
 $car->save();
+
+$cars = Car::find(
+    new AndFilter(
+        new GreaterThan(Car::column("price"), 25000.0),
+        new DifferentFrom(Car::column("brand"), "Ford")
+    ),
+    10,  // page size
+    1    // page number
+);

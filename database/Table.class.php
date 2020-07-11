@@ -6,10 +6,12 @@ namespace database;
 require_once(__DIR__."/Column.class.php");
 require_once(__DIR__."/Database.class.php");
 require_once(__DIR__."/filters/Filter.class.php");
-require_once(__DIR__."/filters/EqualFilter.class.php");
+require_once(__DIR__."/filters/AndFilter.class.php");
+require_once(__DIR__."/filters/Equal.class.php");
 
 use database\filters\Filter;
-use database\filters\EqualFilter;
+use database\filters\AndFilter;
+use database\filters\Equal;
 
 
 class Table
@@ -80,13 +82,13 @@ class Table
         else
         {
             $data = array();
-            $filters = array();
+            $filters = new AndFilter();
 
             foreach (static::getColumns() as $column)
             {
                 if ($column->isPrimaryKey())
                 {
-                    $filters[] = new EqualFilter($column, $this->{$column->getName()});
+                    $filters->append(new Equal($column, $this->{$column->getName()}));
                 }
                 else
                 {
@@ -100,12 +102,25 @@ class Table
                 // TODO: optimize to have only one call to getColumns()
                 foreach (static::getColumns() as $column)
                 {
-                    $filters[] = new EqualFilter($column, $this->{$column->getName()});
+                    $filters->append(new Equal($column, $this->{$column->getName()}));
                 }
             }
 
             Database::get()->query(static::getUpdateQuery($data, $filters));
         }
+    }
+
+    public static function column($name) : Column
+    {
+        $class = new \ReflectionClass(static::class);
+
+        if (!$class->hasProperty($name))
+        {
+            throw new \Exception("Invalid column name \"${name}\".");
+        }
+
+        $property = $class->getProperty($name);
+        return new Column($property);
     }
 
     protected static function getColumns() : array
@@ -351,7 +366,7 @@ class Table
 
     public static function get(...$primaryKey) : Table
     {
-        $filters = array();
+        $filters = new AndFilter();
 
         foreach (static::getColumns() as $column)
         {
@@ -362,7 +377,7 @@ class Table
                     throw new \Exception("Missing \"".$column->getName()."\" primary key argument.");
                 }
 
-                $filters[] = new EqualFilter($column, array_shift($primaryKey));
+                $filters->append(new Equal($column, array_shift($primaryKey)));
             }
         }
 
@@ -381,22 +396,13 @@ class Table
         return $results[0];
     }
 
-    protected static function getWhereClause(array $filters) : string
+    protected static function getWhereClause(Filter $filters) : string
     {
-        $parts = array();
+        $strFilters = (string) $filters;
 
-        // TODO: Implement the combinatory logic
-        foreach ($filters as $filter)
+        if (strlen($strFilters) > 0)
         {
-            if ($filter instanceof Filter)
-            {
-                $parts[] = $filter->__toString();
-            }
-        }
-
-        if (count($parts))
-        {
-            return "WHERE ".implode(" AND ", $parts);
+            return "WHERE ${strFilters}";
         }
         else
         {
@@ -404,7 +410,7 @@ class Table
         }
     }
 
-    public static function getSelectQuery(array $filters, ?int $pageSize = null, ?int $page = null) : string
+    public static function getSelectQuery(Filter $filters, ?int $pageSize = null, ?int $page = null) : string
     {
         $columns = array();
         foreach (static::getColumns() as $column)
@@ -419,7 +425,7 @@ class Table
             static::getFullEscapedTableName()
         );
 
-        if (count($filters) > 0)
+        if (!is_null($filters))
         {
             $queryParts[] = static::getWhereClause($filters);
         }
@@ -433,7 +439,7 @@ class Table
         return implode(" ", $queryParts).";";
     }
 
-    public static function find(array $filters, ?int $pageSize = null, ?int $page = null) : array
+    public static function find(Filter $filters, ?int $pageSize = null, ?int $page = null) : array
     {
         $results = array();
         $rows = Database::get()->query(static::getSelectQuery($filters, $pageSize, $page));
@@ -446,7 +452,7 @@ class Table
         return $results;
     }
 
-    public static function getUpdateQuery(array $data, array $filters) : string
+    public static function getUpdateQuery(array $data, Filter $filters) : string
     {
         $update = array();
 
@@ -462,7 +468,7 @@ class Table
             implode(", ", $update)
         );
 
-        if (count($filters))
+        if (!is_null($filters))
         {
             $queryParts[] = static::getWhereClause($filters);
         }

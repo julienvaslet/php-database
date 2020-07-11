@@ -10,7 +10,7 @@ use database\Database;
 use database\Column;
 
 
-class EqualFilter extends ColumnFilter
+class GreaterThan extends ColumnFilter
 {
     protected $value;
 
@@ -22,6 +22,6 @@ class EqualFilter extends ColumnFilter
 
     public function __toString() : string
     {
-        return $this->column->getEscapedName()." = ".Database::escapeValue($this->value);
+        return $this->column->getEscapedName()." > ".Database::escapeValue($this->value);
     }
 }
