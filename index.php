@@ -4,6 +4,7 @@ require_once(__DIR__."/database/database.php");
 
 use \database\Database;
 use \database\Table;
+use \database\OrderBy;
 use \database\filters\AndFilter;
 use \database\filters\GreaterThan;
 use \database\filters\DifferentFrom;
@@ -100,5 +101,6 @@ $cars = Car::find(
         new DifferentFrom(Car::column("brand"), "Ford")
     ),
     10,  // page size
-    1    // page number
+    1,   // page number
+    new OrderBy(Car::column("price"), OrderBy::Asc)
 );

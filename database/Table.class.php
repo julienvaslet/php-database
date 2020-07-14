@@ -5,6 +5,7 @@ namespace database;
 
 require_once(__DIR__."/Column.class.php");
 require_once(__DIR__."/Database.class.php");
+require_once(__DIR__."/OrderBy.class.php");
 require_once(__DIR__."/filters/Filter.class.php");
 require_once(__DIR__."/filters/AndFilter.class.php");
 require_once(__DIR__."/filters/Equal.class.php");
@@ -410,7 +411,7 @@ class Table
         }
     }
 
-    public static function getSelectQuery(Filter $filters, ?int $pageSize = null, ?int $page = null) : string
+    public static function getSelectQuery(Filter $filters, ?int $pageSize = null, ?int $page = null, ?OrderBy $orderBy = null) : string
     {
         $columns = array();
         foreach (static::getColumns() as $column)
@@ -430,6 +431,11 @@ class Table
             $queryParts[] = static::getWhereClause($filters);
         }
 
+        if (!is_null($orderBy))
+        {
+            $queryParts[] = (string) $orderBy;
+        }
+
         if (!is_null($pageSize))
         {
             $page = is_null($page) || $page == 0 ? 0 : $page - 1;
@@ -439,10 +445,10 @@ class Table
         return implode(" ", $queryParts).";";
     }
 
-    public static function find(Filter $filters, ?int $pageSize = null, ?int $page = null) : array
+    public static function find(Filter $filters, ?int $pageSize = null, ?int $page = null, ?OrderBy $orderBy = null) : array
     {
         $results = array();
-        $rows = Database::get()->query(static::getSelectQuery($filters, $pageSize, $page));
+        $rows = Database::get()->query(static::getSelectQuery($filters, $pageSize, $page, $orderBy));
 
         while ($row = $rows->fetch_assoc())
         {
