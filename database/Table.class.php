@@ -18,6 +18,7 @@ use database\filters\Equal;
 class Table
 {
     protected bool $__newRow;
+    protected bool $__lazy;
 
     /**
      * Create a new instance for a new object that doesn't exist in the database.
@@ -27,6 +28,7 @@ class Table
     public function __construct(...$values)
     {
         $this->__newRow = true;
+        $this->__lazy = false;
         $argumentsCount = count($values);
 
         foreach (static::getColumns() as $column)
@@ -50,6 +52,16 @@ class Table
         {
             throw new \Exception("Too many arguments: ${argumentsCount} specified, ".($argumentsCount - count($values))." expected.");
         }
+    }
+
+    public function getPrimaryKey() : array {
+        $primaryKey = array();
+
+        foreach (static::getPrimaryKeyColumns() as $column) {
+            $primaryKey[] = $this->{$column->getName()};
+        }
+
+        return $primaryKey;
     }
 
     public function save()
@@ -124,7 +136,7 @@ class Table
         return new Column($property);
     }
 
-    protected static function getColumns() : array
+    public static function getColumns() : array
     {
         $columns = array();
         $class = new \ReflectionClass(static::class);
@@ -135,6 +147,21 @@ class Table
             if (substr($property->getName(), 0, 2) != "__")
             {
                 $columns[] = new Column($property);
+            }
+        }
+
+        return $columns;
+    }
+
+    public static function getPrimaryKeyColumns() : array
+    {
+        $columns = array();
+
+        foreach (static::getColumns() as $column)
+        {
+            if ($column->isPrimaryKey())
+            {
+                $columns[] = $column;
             }
         }
 
@@ -161,6 +188,16 @@ class Table
         return Database::escapeName(static::getPrimaryKeyName());
     }
 
+    public static function getForeignKeyName(Column $column, Column $reference) : string
+    {
+        return "fk_".$column->getTableName()."_".$reference->getTableName();
+    }
+
+    public static function getEscapedForeignKeyName(Column $column, Column $reference) : string
+    {
+        return Database::escapeName(static::getForeignKeyName($column, $reference));
+    }
+
     public static function getUniqueKeyName($columnName)
     {
         return "uniq_".static::getTableName()."_${columnName}";
@@ -181,6 +218,7 @@ class Table
 
         $columnsAndConstraints = array();
         $primaryKey = array();
+        $foreignKeys = array();
         $uniqueColumns = array();
 
         foreach (static::getColumns() as $column)
@@ -203,6 +241,11 @@ class Table
                 $primaryKey[] = $column->getEscapedName();
             }
 
+            if ($column->isForeignKey())
+            {
+                $foreignKeys[] = $column;
+            }
+
             if ($column->isUnique())
             {
                 $uniqueColumns[] = $column;
@@ -212,6 +255,12 @@ class Table
         if (count($primaryKey))
         {
             $columnsAndConstraints[] = "CONSTRAINT ".static::getEscapedPrimaryKeyName()." PRIMARY KEY (".implode(", ", $primaryKey).")";
+        }
+
+        foreach ($foreignKeys as $column)
+        {
+            $reference = $column->getReference();
+            $columnsAndConstraints[] = "CONSTRAINT ".static::getEscapedForeignKeyName($column, $reference)." FOREIGN KEY (".$column->getEscapedName().") REFERENCES ".$reference->getEscapedTableName()." (".$reference->getEscapedName().") ON UPDATE ".$column->getOnReferenceUpdateAction()." ON DELETE ".$column->getOnReferenceDeleteAction();
         }
 
         foreach ($uniqueColumns as $column)
@@ -334,6 +383,10 @@ class Table
                 {
                     $postConstructorColumns[] = $column;
                 }
+                else if ($column->isForeignKey())
+                {
+                    $constructorArgs[] =  $column->createReferencedTableLazyInstance($data[$column->getName()]);
+                }
                 else
                 {
                     $constructorArgs[] = $data[$column->getName()];
@@ -354,6 +407,43 @@ class Table
         }
 
         $instance->__newRow = false;
+
+        return $instance;
+    }
+
+    /**
+     * Create a new instance for a new object that doesn't exist in the database.
+     * It behaves the same as calling the constructor but with an associative array
+     * as unique argument.
+     *
+     * Auto-incremented values are ignored, because yes they will be automatically incremented :)
+     * Missing values are set to their default value when it exists, or null if authorized.
+     *
+     * @param array $data   The associative array representing the instance values.
+     * @return Table        The newly created instance.
+     */
+    public static function newLazyInstance(...$primaryKey) : Table
+    {
+        $class = new \ReflectionClass(static::class);
+        $instance = $class->newInstanceWithoutConstructor();
+        $instance->__lazy = true;
+        $instance->__newRow = false;
+
+        foreach (static::getColumns() as $column)
+        {
+            if ($column->isPrimaryKey())
+            {
+                if (count($primaryKey) == 0) {
+                    throw new Exception("Can't instanciate a lazy instance: too few primary key values.");
+                }
+
+                $instance->{$column->getName()} = $column->parseValue(array_shift($primaryKey));
+            }
+        }
+
+        if (count($primaryKey) > 0) {
+            throw new Exception("Can't instanciate a lazy instance: too much primary key values.");
+        }
 
         return $instance;
     }

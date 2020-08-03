@@ -3,6 +3,8 @@
 
 namespace database;
 
+require_once(__DIR__."/Table.class.php");
+
 
 class Database
 {
@@ -123,6 +125,15 @@ class Database
         else if (is_bool($value))
         {
             $escapedValue = ($value === true) ? "1" : "0";
+        }
+        else if ($value instanceof Table) {
+            $primaryKey = $value->getPrimaryKey();
+
+            if (count($primaryKey) != 1) {
+                throw new Exception("Foreign key target field must be only 1 column.");
+            }
+
+            return Database::escapeValue($primaryKey[0]);
         }
 
         return $escapedValue;

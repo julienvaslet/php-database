@@ -3,9 +3,13 @@
 
 namespace database;
 
+require_once(__DIR__."/Table.class.php");
+
 
 class Column
 {
+    protected \ReflectionClass $table;
+    protected string $tableName;
     protected string $name;
     protected \ReflectionType $phpType;
     protected string $sqlType;
@@ -14,18 +18,22 @@ class Column
     protected bool $autoIncrement;
     protected bool $unique;
     protected bool $primaryKey;
+    protected ?Column $references;
+    protected string $onReferenceUpdate;
+    protected string $onReferenceDelete;
 
     // $default (default value)
-    // $references (foreignKey)
 
 
     public function __construct(\ReflectionProperty $property)
     {
+        $this->table = $property->getDeclaringClass();
+        $this->tableName = $this->table->getMethod("getTableName")->invoke(null);
         $this->name = $property->getName();
 
         if (!$property->hasType())
         {
-            throw new \Exception("Missing type for ".$property->getDeclaringClass()->getName()."::$".$this->name." class attribute!");
+            throw new \Exception("Missing type for ".$this->table->getName()."::$".$this->name." class attribute!");
         }
 
         $attributes = static::parseDocComment($property->getDocComment());
@@ -33,8 +41,34 @@ class Column
         $this->comment = $attributes["comment"];
         $this->unique = array_key_exists("unique", $attributes) && $attributes["unique"] == true;
         $this->primaryKey = array_key_exists("primaryKey", $attributes) && $attributes["primaryKey"] == true;
+        $this->references = null;
+        $this->onReferenceUpdate = "NO ACTION";
+        $this->onReferenceDelete = "NO ACTION";
         $this->phpType = $property->getType();
-        $this->sqlType = static::getMySqlType($this->phpType, $attributes);
+
+        if ($this->phpType->isBuiltin())
+        {
+            $this->sqlType = static::getMySqlType($this->phpType, $attributes);
+        }
+        else
+        {
+            $typeClass = new \ReflectionClass($this->phpType->getName());
+            if ($typeClass->isSubclassOf(Table::class))
+            {
+                $foreignColumns = $typeClass->getMethod("getPrimaryKeyColumns")->invoke(null);
+
+                if (count($foreignColumns) != 1)
+                {
+                    throw new \Exception("Only single column foreign keys are supported for now, the referenced class has ".count($foreignColumns)." primary key columns.");
+                }
+
+                $this->references = $foreignColumns[0];
+                $this->onReferenceUpdate = array_key_exists("onUpdate", $attributes) ? $attributes["onUpdate"] : "NO ACTION";
+                $this->onReferenceDelete = array_key_exists("onDelete", $attributes) ? $attributes["onDelete"] : "NO ACTION";
+
+                $this->sqlType = $foreignColumns[0]->getType();
+            }
+        }
 
         $this->autoIncrement = array_key_exists("autoIncrement", $attributes) && $attributes["autoIncrement"] == true;
 
@@ -52,6 +86,31 @@ class Column
     public function getEscapedName() : string
     {
         return Database::escapeName($this->name);
+    }
+
+    public function getTable() : \ReflectionClass
+    {
+        return $this->table;
+    }
+
+    public function getTableName() : string
+    {
+        return $this->tableName;
+    }
+
+    public function getEscapedTableName() : string
+    {
+        return Database::escapeName($this->tableName);
+    }
+
+    public function getFullName() : string
+    {
+        return $this->tableName.".".$this->name;
+    }
+
+    public function getFullEscapedName() : string
+    {
+        return Database::escapeName($this->tableName).".".Database::escapeName($this->name);
     }
 
     public function getType() : string
@@ -77,6 +136,36 @@ class Column
     public function isPrimaryKey() : bool
     {
         return $this->primaryKey;
+    }
+
+    public function isForeignKey() : bool
+    {
+        return !is_null($this->references);
+    }
+
+    public function getReference() : ?Column
+    {
+        return $this->references;
+    }
+
+    public function getOnReferenceUpdateAction() : string
+    {
+        return $this->onReferenceUpdate;
+    }
+
+    public function getOnReferenceDeleteAction() : string
+    {
+        return $this->onReferenceDelete;
+    }
+
+    public function createReferencedTableLazyInstance($primaryKey) : Table
+    {
+        if (!$this->isForeignKey())
+        {
+            throw new Exception("Can't create an instance for a referenced table without a foreign key definition.");
+        }
+
+        return $this->references->getTable()->getMethod("newLazyInstance")->invokeArgs(null, array($primaryKey));
     }
 
     public function parseValue($value)
@@ -173,12 +262,19 @@ class Column
 
         if (is_null($type))
         {
-            $type = $typesFromPhp[$phpType][0];
-
-            // Default case for varchar
-            if ($phpType == "string")
+            if (array_key_exists($phpType, $typesFromPhp))
             {
-                $type .= "(32)";
+                $type = $typesFromPhp[$phpType][0];
+
+                // Default case for varchar
+                if ($phpType == "string")
+                {
+                    $type .= "(32)";
+                }
+            }
+            else
+            {
+                throw new \Exception("Invalid type \"${phpType}\": it must either inherit ".Table::class." or be a base type (string, int, float, bool).");
             }
         }
         else
@@ -295,6 +391,18 @@ class Column
                     case "unsigned":
                     {
                         $attributes[$matches["option"]] = true;
+                        break;
+                    }
+
+                    case "onUpdate":
+                    case "onDelete":
+                    {
+                        if (!preg_match("/^CASCADE|RESTRICT|NO[ _]ACTION|SET[ _]NULL|SET[ _]DEFAULT$/i", $matches["value"]))
+                        {
+                            throw new Exception("Invalid reference action \"".$matches["value"]."\", it must be one of: CASCADE, RESTRICT, NO ACTION, SET NULL or SET DEFAULT.");
+                        }
+
+                        $attributes[$matches["option"]] = str_replace("_", " ", strtoupper($matches["value"]));
                         break;
                     }
 

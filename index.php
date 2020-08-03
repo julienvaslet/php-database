@@ -25,6 +25,24 @@ Database::configure(
 Database::get()->enableDebug();
 
 
+class Brand extends Table
+{
+    /**
+     * @autoIncrement
+     * @unsigned
+     * @primaryKey
+     * The brand identifier.
+     */
+    protected int $id;
+
+    /**
+     * @varchar(32)
+     * The brand's name.
+     */
+    protected string $name;
+}
+
+
 class Car extends Table
 {
     /**
@@ -36,10 +54,11 @@ class Car extends Table
     protected int $id;
 
     /**
-     * @varchar(32)
+     * @onUpdate(cascade)
+     * @onDelete(restrict)
      * The car's brand.
      */
-    protected string $brand;
+    protected Brand $brand;
 
     /**
      * @decimal(9,2)
@@ -70,21 +89,30 @@ class Car extends Table
 
 
 Car::dropTable();
+Brand::dropTable();
+Brand::createTable();
 Car::createTable();
 
-$car = new Car("Toyota", 35000.0);
+$toyota = new Brand("Toyota");
+$toyota->save();
+$chevrolet = new Brand("Chevrolet");
+$chevrolet->save();
+$ford = new Brand("Ford");
+$ford->save();
+
+$car = new Car($toyota, 35000.0);
 $car->save();
 
 $car2 = Car::create(
     array(
-        "brand" => "Ford",
+        "brand" => $ford,
         "price" => 45000.0
     )
 );
 
 $car3 = Car::create(
     array(
-        "brand" => "Chevrolet",
+        "brand" => $chevrolet,
         "price" => 20000.0
     )
 );
@@ -98,7 +126,7 @@ $car->save();
 $cars = Car::find(
     new AndFilter(
         new GreaterThan(Car::column("price"), 25000.0),
-        new DifferentFrom(Car::column("brand"), "Ford")
+        new DifferentFrom(Car::column("brand"), $ford)
     ),
     10,  // page size
     1,   // page number
