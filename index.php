@@ -71,7 +71,7 @@ class Car extends Table
         return $this->id;
     }
 
-    public function getBrand() : string
+    public function getBrand() : Brand
     {
         return $this->brand;
     }

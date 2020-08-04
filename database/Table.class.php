@@ -54,18 +54,40 @@ class Table
         }
     }
 
-    public function getPrimaryKey() : array {
+    public function getPrimaryKey() : array
+    {
         $primaryKey = array();
 
-        foreach (static::getPrimaryKeyColumns() as $column) {
+        foreach (static::getPrimaryKeyColumns() as $column)
+        {
             $primaryKey[] = $this->{$column->getName()};
         }
 
         return $primaryKey;
     }
 
+    public function isLazy() : bool
+    {
+        return $this->__lazy;
+    }
+
+    public function completeLoading()
+    {
+        $object = static::get(...$this->getPrimaryKey());
+
+        foreach (static::getColumns() as $column)
+        {
+            $this->{$column->getName()} = $object->{$column->getName()};
+        }
+    }
+
     public function save()
     {
+        if ($this->__lazy === true)
+        {
+            throw new Exception("Can't save lazy-loaded objects, please complete its load first with completeLoading() method.");
+        }
+
         if ($this->__newRow === true)
         {
             $data = array();
