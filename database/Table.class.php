@@ -145,6 +145,32 @@ class Table
         }
     }
 
+    public function delete()
+    {
+        if ($this->__newRow === true)
+        {
+            throw new Exception("Can't delete a row that hasn't been inserted yet.");
+        }
+
+        $filters = new AndFilter();
+
+        foreach (static::getPrimaryKeyColumns() as $column)
+        {
+            $filters->append(new Equal($column, $this->{$column->getName()}));
+        }
+
+        // When there is no primary key, use the data as filter.
+        if (count($filters) == 0)
+        {
+            foreach (static::getColumns() as $column)
+            {
+                $filters->append(new Equal($column, $this->{$column->getName()}));
+            }
+        }
+
+        Database::get()->query(static::getDeleteQuery($filters));
+    }
+
     public static function column($name) : Column
     {
         $class = new \ReflectionClass(static::class);
@@ -523,7 +549,7 @@ class Table
         }
     }
 
-    public static function getSelectQuery(Filter $filters, ?int $pageSize = null, ?int $page = null, ?OrderBy $orderBy = null) : string
+    public static function getSelectQuery(?Filter $filters, ?int $pageSize = null, ?int $page = null, ?OrderBy $orderBy = null) : string
     {
         $columns = array();
         foreach (static::getColumns() as $column)
@@ -570,7 +596,7 @@ class Table
         return $results;
     }
 
-    public static function getUpdateQuery(array $data, Filter $filters) : string
+    public static function getUpdateQuery(array $data, ?Filter $filters) : string
     {
         $update = array();
 
@@ -592,5 +618,44 @@ class Table
         }
 
         return implode(" ", $queryParts).";";
+    }
+
+    public static function getDeleteQuery(?Filter $filters) : string
+    {
+        $queryParts = array(
+            "DELETE FROM",
+            static::getFullEscapedTableName()
+        );
+
+        if (!is_null($filters))
+        {
+            $queryParts[] = static::getWhereClause($filters);
+        }
+
+        return implode(" ", $queryParts).";";
+    }
+
+    public static function count(?Filter $filters = null) : int
+    {
+        $queryParts = array(
+            "SELECT COUNT(*) AS `count` FROM",
+            static::getFullEscapedTableName()
+        );
+
+        if (!is_null($filters))
+        {
+            $queryParts[] = static::getWhereClause($filters);
+        }
+
+        $rows = Database::get()->query(implode(" ", $queryParts).";");
+        $count = null;
+
+        while ($row = $rows->fetch_assoc())
+        {
+            $count = $row["count"];
+            break;
+        }
+
+        return $count;
     }
 }

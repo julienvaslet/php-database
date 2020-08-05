@@ -132,3 +132,13 @@ $cars = Car::find(
     1,   // page number
     new OrderBy(Car::column("price"), OrderBy::Asc)
 );
+
+$carsCountWithFilter = Car::count(
+    new AndFilter(
+        new GreaterThan(Car::column("price"), 25000.0),
+        new DifferentFrom(Car::column("brand"), $ford)
+    )
+);
+
+$car2->delete();
+$carsCount = Car::count();
