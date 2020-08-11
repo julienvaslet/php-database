@@ -1,6 +1,6 @@
 <?php
 
-require_once(__DIR__."/database/database.php");
+require_once(__DIR__."../database/database.php");
 
 use \database\Database;
 use \database\Table;
