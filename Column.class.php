@@ -46,7 +46,7 @@ class Column
         $this->onReferenceDelete = "NO ACTION";
         $this->phpType = $property->getType();
 
-        if ($this->phpType->isBuiltin())
+        if (\in_array($this->phpType->getName(), array("string", "int", "float", "bool", "DateTime")))
         {
             $this->sqlType = static::getMySqlType($this->phpType, $attributes);
         }
@@ -67,6 +67,10 @@ class Column
                 $this->onReferenceDelete = array_key_exists("onDelete", $attributes) ? $attributes["onDelete"] : "NO ACTION";
 
                 $this->sqlType = $foreignColumns[0]->getType();
+            }
+            else
+            {
+                throw new \Exception("Type \"".$this->phpType."\" is not handled for a table column.");
             }
         }
 
@@ -232,6 +236,17 @@ class Column
                     break;
                 }
 
+                case "DateTime":
+                {
+                    if (!preg_match("/^[0-9]+$/", $value))
+                    {
+                        throw new \Exception("Column ".$this->getName()." must be a DateTime (unix timestamp), ".gettype($value)." provided.");
+                    }
+
+                    $value = new \DateTime("@${value}");
+                    break;
+                }
+
                 default:
                 {
                     // TODO: Handle custom types.
@@ -257,7 +272,8 @@ class Column
             "string" => array("VARCHAR", "TEXT", "BLOB"),
             "float" => array("FLOAT", "DOUBLE", "DECIMAL"),
             "int" => array("INT"),
-            "bool" => array("BOOLEAN", "INT")
+            "bool" => array("BOOLEAN", "INT"),
+            "DateTime" => array("TIMESTAMP")
         );
 
         if (is_null($type))
@@ -274,7 +290,7 @@ class Column
             }
             else
             {
-                throw new \Exception("Invalid type \"${phpType}\": it must either inherit ".Table::class." or be a base type (string, int, float, bool).");
+                throw new \Exception("Invalid type \"${phpType}\": it must either inherit ".Table::class." or be a base type (".implode(", ", array_keys($typesFromPhp)).").");
             }
         }
         else

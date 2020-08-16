@@ -126,10 +126,16 @@ class Database
         {
             $escapedValue = ($value === true) ? "1" : "0";
         }
-        else if ($value instanceof Table) {
+        else if ($value instanceof \DateTime)
+        {
+            $escapedValue = strval($value->getTimestamp());
+        }
+        else if ($value instanceof Table)
+        {
             $primaryKey = $value->getPrimaryKey();
 
-            if (count($primaryKey) != 1) {
+            if (count($primaryKey) != 1)
+            {
                 throw new Exception("Foreign key target field must be only 1 column.");
             }
 
