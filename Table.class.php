@@ -1,5 +1,5 @@
 <?php
-// Copyright (c) 2020 Julien Vaslet
+// Copyright (c) Julien Vaslet
 
 namespace database;
 
@@ -218,7 +218,9 @@ class Table
 
     public static function getTableName()
     {
-        return strtolower(preg_replace("|([^A-Z])([A-Z])|", "$1_$2", static::class));
+        return strtolower(
+            preg_replace("|([^A-Z])([A-Z])|", "$1_$2",
+                preg_replace("|.*\\\\([^\\\\]+)$|", "$1", static::class)));
     }
 
     public static function getFullEscapedTableName()
