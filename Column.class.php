@@ -122,6 +122,11 @@ class Column
         return $this->sqlType;
     }
 
+    public function getPhpType() : string
+    {
+        return $this->phpType->getName();
+    }
+
     public function getComment() : string
     {
         return $this->comment;
