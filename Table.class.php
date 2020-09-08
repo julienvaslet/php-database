@@ -307,10 +307,28 @@ class Table
             $columnsAndConstraints[] = "CONSTRAINT ".static::getEscapedPrimaryKeyName()." PRIMARY KEY (".implode(", ", $primaryKey).")";
         }
 
+        $foreignKeysNames = array();
+
         foreach ($foreignKeys as $column)
         {
             $reference = $column->getReference();
-            $columnsAndConstraints[] = "CONSTRAINT ".static::getEscapedForeignKeyName($column, $reference)." FOREIGN KEY (".$column->getEscapedName().") REFERENCES ".$reference->getEscapedTableName()." (".$reference->getEscapedName().") ON UPDATE ".$column->getOnReferenceUpdateAction()." ON DELETE ".$column->getOnReferenceDeleteAction();
+            $foreignKeyName = static::getForeignKeyName($column, $reference);
+
+            if (in_array($foreignKeyName, $foreignKeysNames))
+            {
+                $increment = 1;
+
+                while (in_array("${foreignKeyName}_${increment}", $foreignKeysNames))
+                {
+                    $increment++;
+                }
+
+                $foreignKeyName = "${foreignKeyName}_${increment}";
+            }
+
+            $foreignKeysNames[] = $foreignKeyName;
+
+            $columnsAndConstraints[] = "CONSTRAINT ".Database::escapeName($foreignKeyName)." FOREIGN KEY (".$column->getEscapedName().") REFERENCES ".$reference->getEscapedTableName()." (".$reference->getEscapedName().") ON UPDATE ".$column->getOnReferenceUpdateAction()." ON DELETE ".$column->getOnReferenceDeleteAction();
         }
 
         foreach ($uniqueColumns as $column)
@@ -585,7 +603,7 @@ class Table
         return implode(" ", $queryParts).";";
     }
 
-    public static function find(Filter $filters, ?int $pageSize = null, ?int $page = null, ?OrderBy $orderBy = null) : array
+    public static function find(?Filter $filters = null, ?int $pageSize = null, ?int $page = null, ?OrderBy $orderBy = null) : array
     {
         $results = array();
         $rows = Database::get()->query(static::getSelectQuery($filters, $pageSize, $page, $orderBy));
