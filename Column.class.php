@@ -243,6 +243,10 @@ class Column
 
                 case "DateTime":
                 {
+                    if ($value instanceof \DateTime) {
+                        break;
+                    }
+
                     if (!preg_match("/^[0-9]+$/", $value))
                     {
                         throw new \Exception("Column ".$this->getName()." must be a DateTime (unix timestamp), ".gettype($value)." provided.");
