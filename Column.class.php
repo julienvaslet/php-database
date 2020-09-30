@@ -67,6 +67,12 @@ class Column
                 $this->onReferenceDelete = array_key_exists("onDelete", $attributes) ? $attributes["onDelete"] : "NO ACTION";
 
                 $this->sqlType = $foreignColumns[0]->getType();
+
+                // TODO: Store the MySQL type as a structured data to cleanly switch the null option
+                if ($this->phpType->allowsNull() && !$foreignColumns[0]->phpType->allowsNull())
+                {
+                    $this->sqlType = preg_replace("/\bNOT NULL\b/", "NULL", $this->sqlType);
+                }
             }
             else
             {

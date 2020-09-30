@@ -85,7 +85,7 @@ class Table
     {
         if ($this->__lazy === true)
         {
-            throw new Exception("Can't save lazy-loaded objects, please complete its load first with completeLoading() method.");
+            throw new Exception("Can't save lazy-loaded objects, please complete its loading first with completeLoading() method.");
         }
 
         if ($this->__newRow === true)
