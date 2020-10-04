@@ -453,7 +453,14 @@ class Table
                 }
                 else if ($column->isForeignKey())
                 {
-                    $constructorArgs[] =  $column->createReferencedTableLazyInstance($data[$column->getName()]);
+                    if (is_null($data[$column->getName()]))
+                    {
+                        $constructorArgs[] = null;
+                    }
+                    else
+                    {
+                        $constructorArgs[] = $column->createReferencedTableLazyInstance($data[$column->getName()]);
+                    }
                 }
                 else
                 {

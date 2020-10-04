@@ -215,7 +215,7 @@ class Column
 
                 case "float":
                 {
-                    if (!is_float($value) && !(is_string($value) && preg_match("/^(?:\+-)?[0-9]*\.[0-9]*(?:[eE][0-9]+)?$/", $value)))
+                    if (!is_float($value) && !(is_string($value) && preg_match("/^(?:[\+\-])?[0-9]*\.[0-9]*(?:[eE][0-9]+)?$/", $value)))
                     {
                         throw new \Exception("Column ".$this->getName()." must be a float, ".gettype($value)." provided.");
                     }
@@ -253,12 +253,18 @@ class Column
                         break;
                     }
 
-                    if (!preg_match("/^[0-9]+$/", $value))
+                    if (preg_match("/^[0-9]+$/", $value))
                     {
-                        throw new \Exception("Column ".$this->getName()." must be a DateTime (unix timestamp), ".gettype($value)." provided.");
+                        $value = new \DateTime("@${value}");
                     }
-
-                    $value = new \DateTime("@${value}");
+                    else if (preg_match("/^[0-9]{4}-[0-9]{2}-[0-9]{2} [0-9]{2}:[0-9]{2}:[0-9]{2}$/", $value))
+                    {
+                        $value = \DateTime::createFromFormat("Y-m-d H:i:s", $value);
+                    }
+                    else
+                    {
+                        throw new \Exception("Column ".$this->getName()." must be a DateTime, ".gettype($value)." provided.");
+                    }
                     break;
                 }
 
