@@ -128,7 +128,7 @@ class Database
         }
         else if ($value instanceof \DateTime)
         {
-            $escapedValue = strval($value->getTimestamp());
+            $escapedValue = "_utf8'".$value->format("Y-m-d H:i:s")."'";
         }
         else if ($value instanceof Table)
         {

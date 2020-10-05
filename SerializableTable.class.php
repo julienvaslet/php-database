@@ -55,6 +55,10 @@ if (interface_exists("\gateway\Serializable"))
             {
                 $data = $data->serialize();
             }
+            else if ($data instanceof \DateTime)
+            {
+                $data = $data->format(\DateTimeInterface::ISO8601);
+            }
             else if (is_array($data))
             {
                 $data = array_map(array(static::class, "serializeData"), $data);
